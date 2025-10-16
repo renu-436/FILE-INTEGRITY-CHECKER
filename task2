@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""
+simple_web_scanner.py
+A minimal, student-friendly web reconnaissance script (non-destructive).
+"""
+
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+import sys
+
+# Simple helper to fetch a URL and handle errors
+def fetch(url, timeout=10):
+    try:
+        resp = requests.get(url, timeout=timeout, headers={"User-Agent": "SimpleScanner/1.0"})
+        return resp
+    except requests.RequestException as e:
+        print(f"[!] Error fetching {url}: {e}")
+        return None
+
+# Print basic HTTP headers and cookies
+def report_headers_and_cookies(resp):
+    print("\n--- HTTP Headers ---")
+    for k, v in resp.headers.items():
+        print(f"{k}: {v}")
+
+    if resp.cookies:
+        print("\n--- Cookies ---")
+        for c in resp.cookies:
+            print(f"{c.name} = {c.value}  (secure={c.secure})")
+    else:
+        print("\nNo cookies set on initial response.")
+
+# Check for some common security headers and show which are missing
+def check_security_headers(resp):
+    wanted = [
+        "Content-Security-Policy",
+        "X-Frame-Options",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "Strict-Transport-Security"
+    ]
+    missing = []
+    for h in wanted:
+        if h not in resp.headers:
+            missing.append(h)
+    print("\n--- Security headers check ---")
+    if missing:
+        print("Missing headers (consider configuring these):")
+        for h in missing:
+            print(" -", h)
+    else:
+        print("All common security headers are present.")
+
+# Find HTML forms on the page and list their inputs
+def find_forms(html, base_url):
+    soup = BeautifulSoup(html, "html.parser")
+    forms = soup.find_all("form")
+    print(f"\nFound {len(forms)} form(s) on the page.")
+    for i, form in enumerate(forms, start=1):
+        action = form.get("action") or ""
+        method = (form.get("method") or "GET").upper()
+        action_full = urljoin(base_url, action)
+        print(f"\nForm #{i}:")
+        print("  action:", action_full)
+        print("  method:", method)
+        inputs = form.find_all(["input", "textarea", "select"])
+        if not inputs:
+            print("  (no inputs found)")
+        else:
+            print("  inputs:")
+            for inp in inputs:
+                name = inp.get("name")
+                itype = inp.get("type") if inp.name == "input" else inp.name
+                print(f"   - name: {name}, type: {itype}")
+
+# Check for robots.txt and sitemap.xml
+def check_common_files(base_url):
+    robots_url = urljoin(base_url, "/robots.txt")
+    sitemap_url = urljoin(base_url, "/sitemap.xml")
+    print("\n--- Common files ---")
+    r = fetch(robots_url)
+    if r and r.status_code == 200 and r.text.strip():
+        print("robots.txt found at", robots_url)
+    else:
+        print("robots.txt not found (or empty).")
+
+    s = fetch(sitemap_url)
+    if s and s.status_code == 200 and s.text.strip():
+        print("sitemap.xml found at", sitemap_url)
+    else:
+        print("sitemap.xml not found (or empty).")
+
+# Quick directory index check by testing a few common directories
+def check_directory_indexing(base_url):
+    common_dirs = ["", "admin/", "uploads/", "images/", "static/"]
+    findings = []
+    for d in common_dirs:
+        url = urljoin(base_url, d)
+        r = fetch(url)
+        if r and "Index of" in r.text:
+            findings.append(url)
+    if findings:
+        print("\nPossible directory listing(s) found:")
+        for u in findings:
+            print(" -", u)
+    else:
+        print("\nNo obvious directory listings found among common dirs.")
+
+# Main flow
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python simple_web_scanner.py https://example.com")
+        sys.exit(1)
+
+    target = sys.argv[1]
+    if not target.startswith("http"):
+        target = "http://" + target
+
+    print("Scanning:", target)
+    resp = fetch(target)
+    if not resp:
+        print("Failed to fetch the target. Exiting.")
+        sys.exit(1)
+
+    print("\nHTTP Status:", resp.status_code)
+
+    report_headers_and_cookies(resp)
+    check_security_headers(resp)
+    find_forms(resp.text, target)
+    check_common_files(target)
+    check_directory_indexing(target)
+
+if _name_ == "_main_":
+    main()
