@@ -1,0 +1,19 @@
+import argparse
+from modules import port_scanner, brute_force, whois_lookup
+
+def main():
+    parser = argparse.ArgumentParser(description="Modular Penetration Testing Toolkit")
+    parser.add_argument("--scan", help="Run port scan on target IP", type=str)
+    parser.add_argument("--brute", help="Run brute force on login URL", type=str)
+    parser.add_argument("--whois", help="Run WHOIS lookup on domain", type=str)
+    args = parser.parse_args()
+
+    if args.scan:
+        port_scanner.run(args.scan)
+    if args.brute:
+        brute_force.run(args.brute)
+    if args.whois:
+        whois_lookup.run(args.whois)
+
+if __name__ == "__main__":
+    main()
